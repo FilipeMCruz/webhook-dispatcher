@@ -3,21 +3,35 @@ package api
 import (
 	"encoding/json"
 	"github.com/google/uuid"
+	"io"
+	"log"
 	"net/http"
 	"webhook-dispatcher/broadcaster"
 	"webhook-dispatcher/db"
 	"webhook-dispatcher/dispatcher"
 )
 
-func BuildIngressEndpointHandler(server broadcaster.BroadcastServer[*http.Request]) http.Handler {
+func BuildIngressEndpointHandler(server broadcaster.BroadcastServer[dispatcher.RequestInfo]) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		server.Send(r.Clone(r.Context()))
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			log.Print(err)
+		}
+
+		server.Send(dispatcher.RequestInfo{
+			Method: r.Method,
+			URL:    r.URL.String(),
+			Body:   body,
+			Header: r.Header,
+		})
+
+		log.Printf("dispatcher: req = %s", r.URL.Path)
 
 		w.WriteHeader(http.StatusOK)
 	})
 }
 
-func BuildRegisterSubscriberEndpointHandler(database db.DB, server broadcaster.BroadcastServer[*http.Request]) http.Handler {
+func BuildRegisterSubscriberEndpointHandler(database db.DB, server broadcaster.BroadcastServer[dispatcher.RequestInfo]) http.Handler {
 	type requestBody struct {
 		Url           string `json:"url,omitempty"`
 		Token         string `json:"token,omitempty"`
@@ -73,7 +87,7 @@ func BuildRegisterSubscriberEndpointHandler(database db.DB, server broadcaster.B
 	})
 }
 
-func BuildRemoveSubscriberEndpointHandler(database db.DB, server broadcaster.BroadcastServer[*http.Request]) http.Handler {
+func BuildRemoveSubscriberEndpointHandler(database db.DB, server broadcaster.BroadcastServer[dispatcher.RequestInfo]) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		id, err := uuid.Parse(r.PathValue("id"))
 		if err != nil {
