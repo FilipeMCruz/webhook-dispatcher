@@ -58,6 +58,17 @@ func NewDispatcher(ID uuid.UUID, Token string, URL string, MatchingURL string) (
 	return &s, nil
 }
 
+func (s *Dispatcher) Listen(ch <-chan RequestInfo) {
+	for req := range ch {
+		if s.match(req) {
+			err := s.dispatch(req)
+			if err != nil {
+				log.Println(err)
+			}
+		}
+	}
+}
+
 func (s *Dispatcher) match(req RequestInfo) bool {
 	_, after, _ := strings.Cut(req.URL, "/events/")
 	return s.rules.Path.MatchString(after)
@@ -70,19 +81,12 @@ func (s *Dispatcher) dispatch(req RequestInfo) error {
 	if err != nil {
 		return err
 	}
-	r.Header = req.Header
+	for k, v := range req.Header {
+		r.Header[k] = v
+	}
 	r.Header.Set("Token", s.Token)
 
 	_, err = s.client.Do(r)
 
 	return err
-}
-
-func (s *Dispatcher) Send(req RequestInfo) {
-	if s.match(req) {
-		err := s.dispatch(req)
-		if err != nil {
-			log.Println(err)
-		}
-	}
 }

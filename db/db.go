@@ -3,6 +3,7 @@ package db
 import (
 	"errors"
 	"github.com/google/uuid"
+	"sync"
 	"webhook-dispatcher/dispatcher"
 )
 
@@ -23,9 +24,12 @@ type DB interface {
 
 type database struct {
 	entries map[uuid.UUID]Dispatcher
+	m       sync.Mutex
 }
 
-func (d database) FetchAll() ([]*dispatcher.Dispatcher, error) {
+func (d *database) FetchAll() ([]*dispatcher.Dispatcher, error) {
+	d.m.Lock()
+	defer d.m.Unlock()
 	result := make([]*dispatcher.Dispatcher, 0)
 
 	for _, e := range d.entries {
@@ -40,7 +44,9 @@ func (d database) FetchAll() ([]*dispatcher.Dispatcher, error) {
 	return result, nil
 }
 
-func (d database) Save(sub *dispatcher.Dispatcher) error {
+func (d *database) Save(sub *dispatcher.Dispatcher) error {
+	d.m.Lock()
+	defer d.m.Unlock()
 	d.entries[sub.ID] = Dispatcher{
 		ID:          sub.ID,
 		Token:       sub.Token,
@@ -51,7 +57,9 @@ func (d database) Save(sub *dispatcher.Dispatcher) error {
 	return nil
 }
 
-func (d database) Fetch(id uuid.UUID, token string) (*dispatcher.Dispatcher, error) {
+func (d *database) Fetch(id uuid.UUID, token string) (*dispatcher.Dispatcher, error) {
+	d.m.Lock()
+	defer d.m.Unlock()
 	e, ok := d.entries[id]
 	if !ok {
 		return nil, errors.New("not found")
@@ -64,7 +72,9 @@ func (d database) Fetch(id uuid.UUID, token string) (*dispatcher.Dispatcher, err
 	return dispatcher.NewDispatcher(e.ID, e.Token, e.URL, e.MatchingURL)
 }
 
-func (d database) Exists(id uuid.UUID, token string) bool {
+func (d *database) Exists(id uuid.UUID, token string) bool {
+	d.m.Lock()
+	defer d.m.Unlock()
 	e, ok := d.entries[id]
 	if !ok {
 		return false
@@ -73,11 +83,13 @@ func (d database) Exists(id uuid.UUID, token string) bool {
 	return e.Token != token
 }
 
-func (d database) Remove(id uuid.UUID) error {
+func (d *database) Remove(id uuid.UUID) error {
+	d.m.Lock()
+	defer d.m.Unlock()
 	delete(d.entries, id)
 	return nil
 }
 
 func NewDB() (DB, error) {
-	return database{entries: make(map[uuid.UUID]Dispatcher)}, nil
+	return &database{entries: make(map[uuid.UUID]Dispatcher)}, nil
 }

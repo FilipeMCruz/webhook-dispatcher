@@ -7,7 +7,7 @@ import (
 
 type BroadcastServer[T any] interface {
 	Send(T)
-	Subscribe(uuid.UUID) <-chan T
+	Subscribe(uuid.UUID, int) <-chan T
 	Unsubscribe(uuid.UUID)
 }
 
@@ -27,8 +27,8 @@ func (s *broadcastServer[T]) Send(t T) {
 	s.source <- t
 }
 
-func (s *broadcastServer[T]) Subscribe(id uuid.UUID) <-chan T {
-	newListener := make(chan T)
+func (s *broadcastServer[T]) Subscribe(id uuid.UUID, bufferSize int) <-chan T {
+	newListener := make(chan T, bufferSize)
 	s.addListener <- addListenerCommand[T]{
 		id: id,
 		ch: newListener,
@@ -87,5 +87,6 @@ func NewBroadcastServer[T any](ctx context.Context) BroadcastServer[T] {
 		removeListener: make(chan uuid.UUID),
 	}
 	go service.serve(ctx)
+
 	return service
 }

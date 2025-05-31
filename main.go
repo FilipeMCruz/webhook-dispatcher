@@ -22,15 +22,16 @@ func main() {
 	defer stop()
 
 	port := flag.Int("port", 8080, "port to listen on")
+	buffer := flag.Int("buffer", 128, "Dispatcher buffer max value, for the backpressure mechanism")
 	flag.Parse()
 
-	err := start(ctx, stop, *port)
+	err := start(ctx, stop, *port, *buffer)
 	if err != nil {
 		log.Fatal(err)
 	}
 }
 
-func start(ctx context.Context, stop func(), port int) error {
+func start(ctx context.Context, stop func(), port, bufferSize int) error {
 	database, err := db.NewDB()
 	if err != nil {
 		return err
@@ -44,17 +45,12 @@ func start(ctx context.Context, stop func(), port int) error {
 	}
 
 	for _, d := range all {
-		ch := bServer.Subscribe(d.ID)
-		go func() {
-			for req := range ch {
-				d.Send(req)
-			}
-		}()
+		go d.Listen(bServer.Subscribe(d.ID, bufferSize))
 	}
 
 	mux := http.NewServeMux()
 	mux.Handle("/events/", api.BuildIngressEndpointHandler(bServer))
-	mux.Handle("POST /subscribers", api.BuildRegisterSubscriberEndpointHandler(database, bServer))
+	mux.Handle("POST /subscribers", api.BuildRegisterSubscriberEndpointHandler(bufferSize, database, bServer))
 	mux.Handle("DELETE /subscribers/{id}", api.BuildRemoveSubscriberEndpointHandler(database, bServer))
 
 	ongoingCtx, stopOngoingGracefully := context.WithCancel(context.Background())

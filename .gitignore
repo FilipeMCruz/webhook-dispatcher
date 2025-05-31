@@ -1,4 +1,4 @@
 .idea
 webhook-dispatcher
-./sink
-./source
+sink
+source

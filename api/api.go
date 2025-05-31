@@ -31,7 +31,7 @@ func BuildIngressEndpointHandler(server broadcaster.BroadcastServer[dispatcher.R
 	})
 }
 
-func BuildRegisterSubscriberEndpointHandler(database db.DB, server broadcaster.BroadcastServer[dispatcher.RequestInfo]) http.Handler {
+func BuildRegisterSubscriberEndpointHandler(bufferSize int, database db.DB, server broadcaster.BroadcastServer[dispatcher.RequestInfo]) http.Handler {
 	type requestBody struct {
 		Url           string `json:"url,omitempty"`
 		Token         string `json:"token,omitempty"`
@@ -77,13 +77,7 @@ func BuildRegisterSubscriberEndpointHandler(database db.DB, server broadcaster.B
 			return
 		}
 
-		ch := server.Subscribe(id)
-
-		go func() {
-			for req := range ch {
-				d.Send(req)
-			}
-		}()
+		go d.Listen(server.Subscribe(id, bufferSize))
 	})
 }
 
