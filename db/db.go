@@ -8,10 +8,16 @@ import (
 )
 
 type Dispatcher struct {
-	ID          uuid.UUID
-	Token       string
-	URL         string
-	MatchingURL string
+	ID            uuid.UUID
+	Token         string
+	URL           string
+	MatchingRules MatchingRules
+}
+
+type MatchingRules struct {
+	Path    string
+	Headers map[string]string
+	Body    []byte
 }
 
 type DB interface {
@@ -33,7 +39,12 @@ func (d *database) FetchAll() ([]*dispatcher.Dispatcher, error) {
 	result := make([]*dispatcher.Dispatcher, 0)
 
 	for _, e := range d.entries {
-		d, err := dispatcher.NewDispatcher(e.ID, e.Token, e.URL, e.MatchingURL)
+		r, err := dispatcher.NewMatchingRules(e.MatchingRules.Path, e.MatchingRules.Headers, e.MatchingRules.Body)
+		if err != nil {
+			return nil, err
+		}
+
+		d, err := dispatcher.NewDispatcher(e.ID, e.Token, e.URL, r)
 		if err != nil {
 			return nil, err
 		}
@@ -48,10 +59,14 @@ func (d *database) Save(sub *dispatcher.Dispatcher) error {
 	d.m.Lock()
 	defer d.m.Unlock()
 	d.entries[sub.ID] = Dispatcher{
-		ID:          sub.ID,
-		Token:       sub.Token,
-		URL:         sub.URL,
-		MatchingURL: sub.MatchingURL,
+		ID:    sub.ID,
+		Token: sub.Token,
+		URL:   sub.URL,
+		MatchingRules: MatchingRules{
+			Path:    sub.Rules.Path.String(),
+			Headers: sub.Rules.Headers,
+			Body:    sub.Rules.Body,
+		},
 	}
 
 	return nil
@@ -69,7 +84,12 @@ func (d *database) Fetch(id uuid.UUID, token string) (*dispatcher.Dispatcher, er
 		return nil, errors.New("invalid token")
 	}
 
-	return dispatcher.NewDispatcher(e.ID, e.Token, e.URL, e.MatchingURL)
+	r, err := dispatcher.NewMatchingRules(e.MatchingRules.Path, e.MatchingRules.Headers, e.MatchingRules.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	return dispatcher.NewDispatcher(e.ID, e.Token, e.URL, r)
 }
 
 func (d *database) Exists(id uuid.UUID, token string) bool {

@@ -6,7 +6,7 @@ import (
 )
 
 type BroadcastServer[T any] interface {
-	Send(T)
+	Publish(T)
 	Subscribe(uuid.UUID, int) <-chan T
 	Unsubscribe(uuid.UUID)
 }
@@ -23,7 +23,7 @@ type broadcastServer[T any] struct {
 	removeListener chan uuid.UUID
 }
 
-func (s *broadcastServer[T]) Send(t T) {
+func (s *broadcastServer[T]) Publish(t T) {
 	s.source <- t
 }
 

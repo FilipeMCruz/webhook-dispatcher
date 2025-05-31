@@ -6,8 +6,6 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"regexp"
-	"strings"
 	"time"
 )
 
@@ -19,37 +17,25 @@ type RequestInfo struct {
 }
 
 type Dispatcher struct {
-	ID          uuid.UUID
-	Token       string
-	URL         string
-	MatchingURL string
-	rules       matchingRules
-	client      *http.Client
+	ID     uuid.UUID
+	Token  string
+	URL    string
+	Rules  *MatchingRules
+	client *http.Client
 }
 
-type matchingRules struct {
-	Path *regexp.Regexp
-}
+func NewDispatcher(id uuid.UUID, token string, downstreamURL string, matchingRules *MatchingRules) (*Dispatcher, error) {
 
-func NewDispatcher(ID uuid.UUID, Token string, URL string, MatchingURL string) (*Dispatcher, error) {
-	rg, err := regexp.Compile(MatchingURL)
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = url.Parse(URL)
+	_, err := url.Parse(downstreamURL)
 	if err != nil {
 		return nil, err
 	}
 
 	s := Dispatcher{
-		ID:          ID,
-		Token:       Token,
-		URL:         URL,
-		MatchingURL: MatchingURL,
-		rules: matchingRules{
-			Path: rg,
-		},
+		ID:    id,
+		Token: token,
+		URL:   downstreamURL,
+		Rules: matchingRules,
 		client: &http.Client{
 			Timeout: 10 * time.Second,
 		},
@@ -60,18 +46,13 @@ func NewDispatcher(ID uuid.UUID, Token string, URL string, MatchingURL string) (
 
 func (s *Dispatcher) Listen(ch <-chan RequestInfo) {
 	for req := range ch {
-		if s.match(req) {
+		if s.Rules.match(req) {
 			err := s.dispatch(req)
 			if err != nil {
 				log.Println(err)
 			}
 		}
 	}
-}
-
-func (s *Dispatcher) match(req RequestInfo) bool {
-	_, after, _ := strings.Cut(req.URL, "/events/")
-	return s.rules.Path.MatchString(after)
 }
 
 func (s *Dispatcher) dispatch(req RequestInfo) error {

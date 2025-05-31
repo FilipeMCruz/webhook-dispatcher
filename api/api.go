@@ -17,8 +17,11 @@ func BuildIngressEndpointHandler(server broadcaster.BroadcastServer[dispatcher.R
 		if err != nil {
 			log.Print(err)
 		}
+		defer func(Body io.ReadCloser) {
+			_ = Body.Close()
+		}(r.Body)
 
-		server.Send(dispatcher.RequestInfo{
+		server.Publish(dispatcher.RequestInfo{
 			Method: r.Method,
 			URL:    r.URL.String(),
 			Body:   body,
@@ -36,7 +39,9 @@ func BuildRegisterSubscriberEndpointHandler(bufferSize int, database db.DB, serv
 		Url           string `json:"url,omitempty"`
 		Token         string `json:"token,omitempty"`
 		MatchingRules struct {
-			URLPath string `json:"url_path,omitempty"`
+			URLPath string            `json:"url_path,omitempty"`
+			Body    []byte            `json:"body,omitempty"`
+			Headers map[string]string `json:"headers,omitempty"`
 		} `json:"matching_rules,omitempty"`
 	}
 
@@ -56,7 +61,18 @@ func BuildRegisterSubscriberEndpointHandler(bufferSize int, database db.DB, serv
 			return
 		}
 
-		d, err := dispatcher.NewDispatcher(id, i.Token, i.Url, i.MatchingRules.URLPath)
+		defer func(Body io.ReadCloser) {
+			_ = Body.Close()
+		}(r.Body)
+
+		rules, err := dispatcher.NewMatchingRules(i.MatchingRules.URLPath, i.MatchingRules.Headers, i.MatchingRules.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+
+			return
+		}
+
+		d, err := dispatcher.NewDispatcher(id, i.Token, i.Url, rules)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 

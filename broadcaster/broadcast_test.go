@@ -21,7 +21,7 @@ func TestNewBroadcastServer(t *testing.T) {
 	defer s.Unsubscribe(sid2)
 
 	v1 := 1
-	s.Send(v1)
+	s.Publish(v1)
 	r1 := <-ch1
 	r2 := <-ch2
 
